@@ -10,6 +10,10 @@ import java.nio.file.Paths;
 import java.util.*;
 
 public class App {
+    private static ChromeDriver driver;
+    private static List<List> data;
+    private static List<String> filtering;
+
     public static void main(String[] args) throws IOException {
         Path path = Paths.get(System.getProperty("user.dir"), "src/main/resources/chromedriver.exe");
         System.setProperty("webdriver.chrome.driver", path.toString());
@@ -19,7 +23,7 @@ public class App {
         options.addArguments("--disable-popup-blocking");   // 팝업 무시
 
         // WebDriver 객체 생성
-        ChromeDriver driver = new ChromeDriver(options);
+        driver = new ChromeDriver(options);
 
         // 웹페이지 요청
         driver.get("https://mhaksa.ajou.ac.kr:30443/public.html#!/e020101");
@@ -39,41 +43,62 @@ public class App {
         WebElement term = driver.findElementByXPath("//*[@select-list='ph.COMBO_DATA_LIST.DS_SHTM_CD_SH']");
         term.sendKeys("1학기");
 
-        // 교과구분
-        WebElement subject_type = driver.findElementByXPath("//*[@select-list='ph.COMBO_DATA_LIST.DS_SUBMATT_CD_SH']");
-        subject_type.sendKeys("전공과목");
-
-        try {
-            Thread.sleep(500); // WebElement 값 읽기 전 충분한 대기 시간.
-        } catch (InterruptedException e) {
-            e.printStackTrace();
-        }
-        
-        // 전공과목 중 전체 선택
-        WebElement major = driver.findElementByXPath("//*[@select-list='ph.OPTIONAL_COMBO_DATA_LIST.DS_MJ_CD_SH2']");
-        major.sendKeys("전체");
-
-        // 검색 버튼 element click
-        WebElement btn_search = driver.findElementByXPath("//*[@class='nb-buttons right btn1']");
-        btn_search.click();
-
-        try {
-            Thread.sleep(2750); // WebElement 값 읽기 전 충분한 대기 시간.
-        } catch (InterruptedException e) {
-            e.printStackTrace();
-        }
-
-        List<String> filtering = new ArrayList<String>();
+        filtering = new ArrayList<String>();
         filtering.add("영어");
         filtering.add("공동");
         filtering.add("야간");
         filtering.add("CYBER강좌반");
 
         // 수업시간표 정보 담을 ArrayList
-        List<List> data = new ArrayList<List>();
+        data = new ArrayList<List>();
+
+        // 웹 크롤링
+        //crawlingData("일선과목");
+        crawlingData("전공과목");
+        //crawlingData("교양과목");
+        //crawlingData("영역별교약");
+
+        for (List datum : data) System.out.println(datum);
+
+        try {
+            Thread.sleep(5000);
+        } catch (InterruptedException e) {
+            e.printStackTrace();
+        } finally {
+            driver.close();
+        }
+    }
+
+    private static void crawlingData(String subject) {
+        // 교과구분:
+        WebElement subject_type = driver.findElementByXPath("//*[@select-list='ph.COMBO_DATA_LIST.DS_SUBMATT_CD_SH']");
+        subject_type.sendKeys(subject);
+
+        try {
+            Thread.sleep(500); // WebElement 값 읽기 전 충분한 대기 시간.
+        } catch (InterruptedException e) {
+            e.printStackTrace();
+        }
+
+        if (subject.equals("전공과목") || subject.equals("일선과목")) {
+            // 전공과목 중 전체 선택
+            WebElement major = driver.findElementByXPath("//*[@select-list='ph.OPTIONAL_COMBO_DATA_LIST.DS_MJ_CD_SH2']");
+            major.sendKeys("전체");
+        }
+
+        // 검색 버튼 element click
+        WebElement btn_search = driver.findElementByXPath("//*[@class='nb-buttons right btn1']");
+        btn_search.click();
+
+        try {
+            Thread.sleep(2800); // WebElement 값 읽기 전 충분한 대기 시간.
+        } catch (InterruptedException e) {
+            e.printStackTrace();
+        }
+
         while (true) {
             try {
-                Thread.sleep(250); // WebElement 값 읽기 전 충분한 대기 시간.
+                Thread.sleep(200); // WebElement 값 읽기 전 충분한 대기 시간.
             } catch (InterruptedException e) {
                 e.printStackTrace();
             }
@@ -89,7 +114,7 @@ public class App {
                 while (true) {
                     index++;
                     if (tmp.get(index).length() == 4 && Character.isAlphabetic(tmp.get(index).charAt(0)) &&
-                        tmp.get(index).substring(1, 4).chars().allMatch(Character::isDigit)) { // 수업 코드
+                            tmp.get(index).substring(1, 4).chars().allMatch(Character::isDigit)) { // 수업 코드
                         tmp_list[4] = tmp.get(index++);
                         break;
                     }
@@ -111,6 +136,7 @@ public class App {
                     }
                 }
                 tmp_list[5] = tmp.get(index++); // 교과구분
+
                 while (index < tmp.size()  && index < 12 // IndexOutOfBoundException Handling
                         && !(tmp.get(index).contains("학부") || tmp.get(index).contains("학과") || tmp.get(index).contains("전공"))) {
                     // 하나의 행 끝까지 데이터 추출
@@ -122,7 +148,7 @@ public class App {
                         if (tmp.get(index+1).length() <= 1 && Character.isDigit(tmp.get(index+1).charAt(0))) {
                             tmp_list[8] = tmp.get(++index); // 시간
                         }
-                    } else if (!(tmp.get(index).split(" ")[0].contains("(")|| tmp.get(index).split(" ")[0].contains("~"))
+                    } else if (!(tmp.get(index).split(" ")[0].contains("(") || tmp.get(index).split(" ")[0].contains("~"))
                             && !Character.isDigit(tmp.get(index).charAt(tmp.get(index).length()-1))) {
                         tmp_list[9] = tmp.get(index); // 교수명
                     } else if (tmp.get(index).split(" ")[0].contains("(") || tmp.get(index).split(" ")[0].contains(")")
@@ -148,20 +174,5 @@ public class App {
             WebElement btn_next = driver.findElementByXPath("//*[@ng-click='$paging.nextPage()']");
             btn_next.click();
         }
-
-        for (List datum : data) System.out.println(datum);
-
-        // 웹페이지 소스 출력
-        // System.out.println(driver.getPageSource());
-
-        // 종료
-        /*
-        try {
-            Thread.sleep(5000);
-        } catch (InterruptedException e) {
-            e.printStackTrace();
-        } finally {
-            driver.close();
-        }*/
     }
 }
